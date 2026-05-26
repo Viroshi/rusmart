@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # rusmart
 
 A new Flutter project.
@@ -15,3 +16,7 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+=======
+# RUsmart
+Aplicação mobile para Restaurante Universitário na UESPI
+>>>>>>> 3f28f9ae4824d373ce48d3e820bf3cced13557d3
