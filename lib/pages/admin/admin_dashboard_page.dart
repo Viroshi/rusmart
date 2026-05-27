@@ -2,10 +2,16 @@ import 'package:flutter/material.dart';
 import 'admin_menu_page.dart';
 import 'admin_validation_page.dart';
 import '../../core/app_colors.dart';
+import '../../models/daily_report_model.dart';
+import '../../models/menu_model.dart';
+import '../../services/menu_service.dart';
+import '../../services/report_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/food_line.dart';
 import '../../widgets/info_box.dart';
 import 'admin_reports_page.dart';
+import '../../services/auth_service.dart';
+import '../auth/login_page.dart';
 
 class AdminDashboardPage extends StatelessWidget {
   const AdminDashboardPage({super.key});
@@ -41,6 +47,18 @@ class AdminDashboardPage extends StatelessWidget {
     );
   }
 
+  Future<void> sairDaGestao(BuildContext context) async {
+    await AuthService().signOut();
+
+    if (!context.mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -58,7 +76,7 @@ class AdminDashboardPage extends StatelessWidget {
         actions: [
           IconButton(
             onPressed: () {
-              sair(context);
+              sairDaGestao(context);
             },
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Sair',
@@ -100,69 +118,12 @@ class AdminDashboardPage extends StatelessWidget {
                   const InfoBox(
                     icon: Icons.info_outline_rounded,
                     text:
-                        'Os dados abaixo são simulados. Depois, eles serão alimentados pelo backend do sistema.',
+                        'Os dados abaixo são atualizados com as fichas, validações e cardápio salvos no Firebase.',
                   ),
 
                   const SizedBox(height: 20),
 
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final double largura = constraints.maxWidth;
-
-                      final double cardWidth = largura >= 900
-                          ? (largura - 42) / 4
-                          : largura >= 600
-                          ? (largura - 14) / 2
-                          : largura;
-
-                      return Wrap(
-                        spacing: 14,
-                        runSpacing: 14,
-                        children: [
-                          SizedBox(
-                            width: cardWidth,
-                            child: const AdminMetricCard(
-                              icon: Icons.confirmation_number_outlined,
-                              title: 'Fichas vendidas',
-                              value: '450',
-                              description: '+12% em relação a ontem',
-                              color: AppColors.primary,
-                            ),
-                          ),
-                          SizedBox(
-                            width: cardWidth,
-                            child: const AdminMetricCard(
-                              icon: Icons.restaurant_rounded,
-                              title: 'Refeições servidas',
-                              value: '320',
-                              description: '71% das fichas vendidas',
-                              color: AppColors.secondary,
-                            ),
-                          ),
-                          SizedBox(
-                            width: cardWidth,
-                            child: const AdminMetricCard(
-                              icon: Icons.payments_outlined,
-                              title: 'Arrecadação',
-                              value: 'R\$ 1.350',
-                              description: 'Pagamentos PIX simulados',
-                              color: AppColors.primaryContainer,
-                            ),
-                          ),
-                          SizedBox(
-                            width: cardWidth,
-                            child: const AdminMetricCard(
-                              icon: Icons.event_busy_outlined,
-                              title: 'Ausências',
-                              value: '14%',
-                              description: 'Alunos que não validaram',
-                              color: AppColors.error,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+                  const DashboardMetricSection(),
 
                   const SizedBox(height: 20),
 
@@ -298,6 +259,94 @@ class AdminDashboardPage extends StatelessWidget {
   }
 }
 
+
+class DashboardMetricSection extends StatelessWidget {
+  const DashboardMetricSection({super.key});
+
+  String formatarValor(double value) {
+    return 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
+  }
+
+  String formatarPercentual(double value) {
+    return '${(value * 100).toStringAsFixed(0).replaceAll('.', ',')}%';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DailyReportModel>(
+      stream: ReportService().watchTodayReport(),
+      builder: (context, snapshot) {
+        final report = snapshot.data;
+        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final totalTickets = report?.totalTickets ?? 0;
+        final validatedTickets = report?.validatedTickets ?? 0;
+        final validationRate = report?.validationRate ?? 0;
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final double largura = constraints.maxWidth;
+
+            final double cardWidth = largura >= 900
+                ? (largura - 42) / 4
+                : largura >= 600
+                    ? (largura - 14) / 2
+                    : largura;
+
+            return Wrap(
+              spacing: 14,
+              runSpacing: 14,
+              children: [
+                SizedBox(
+                  width: cardWidth,
+                  child: AdminMetricCard(
+                    icon: Icons.confirmation_number_outlined,
+                    title: 'Fichas vendidas',
+                    value: loading ? '...' : totalTickets.toString(),
+                    description: 'Total registrado hoje',
+                    color: AppColors.primary,
+                  ),
+                ),
+                SizedBox(
+                  width: cardWidth,
+                  child: AdminMetricCard(
+                    icon: Icons.restaurant_rounded,
+                    title: 'Refeições servidas',
+                    value: loading ? '...' : validatedTickets.toString(),
+                    description: loading
+                        ? 'Carregando validações'
+                        : '${formatarPercentual(validationRate)} das fichas vendidas',
+                    color: AppColors.secondary,
+                  ),
+                ),
+                SizedBox(
+                  width: cardWidth,
+                  child: AdminMetricCard(
+                    icon: Icons.payments_outlined,
+                    title: 'Arrecadação',
+                    value: loading ? '...' : formatarValor(report?.totalRevenue ?? 0),
+                    description: 'Pagamentos PIX simulados no protótipo',
+                    color: AppColors.primaryContainer,
+                  ),
+                ),
+                SizedBox(
+                  width: cardWidth,
+                  child: AdminMetricCard(
+                    icon: Icons.event_busy_outlined,
+                    title: 'Pendentes',
+                    value: loading ? '...' : (report?.paidTickets ?? 0).toString(),
+                    description: 'Fichas ainda não validadas',
+                    color: AppColors.error,
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
 class AdminMetricCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -372,42 +421,79 @@ class AdminMetricCard extends StatelessWidget {
 class DashboardMovementCard extends StatelessWidget {
   const DashboardMovementCard({super.key});
 
+  List<double> valoresPorHorario(DailyReportModel? report) {
+    final values = List<double>.filled(6, 0);
+
+    if (report == null) {
+      return values;
+    }
+
+    for (final ticket in report.tickets) {
+      final hour = ticket.createdAt.hour;
+      final minute = ticket.createdAt.minute;
+      final totalMinutes = hour * 60 + minute;
+
+      if (totalMinutes < 11 * 60) {
+        values[0]++;
+      } else if (totalMinutes < 11 * 60 + 30) {
+        values[1]++;
+      } else if (totalMinutes < 12 * 60) {
+        values[2]++;
+      } else if (totalMinutes < 12 * 60 + 30) {
+        values[3]++;
+      } else if (totalMinutes < 13 * 60) {
+        values[4]++;
+      } else {
+        values[5]++;
+      }
+    }
+
+    return values;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
+    return StreamBuilder<DailyReportModel>(
+      stream: ReportService().watchTodayReport(),
+      builder: (context, snapshot) {
+        final values = valoresPorHorario(snapshot.data);
+
+        return AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.query_stats_rounded, color: AppColors.primary),
-              SizedBox(width: 8),
-              Text(
-                'Movimento por horário',
-                style: TextStyle(
-                  color: AppColors.onSurface,
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                ),
+              const Row(
+                children: [
+                  Icon(Icons.query_stats_rounded, color: AppColors.primary),
+                  SizedBox(width: 8),
+                  Text(
+                    'Movimento por horário',
+                    style: TextStyle(
+                      color: AppColors.onSurface,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 6),
+
+              const Text(
+                'Fichas compradas por intervalo.',
+                style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 14),
+              ),
+
+              const SizedBox(height: 22),
+
+              SimpleBarChart(
+                labels: const ['11:00', '11:30', '12:00', '12:30', '13:00', '13:30'],
+                values: values,
               ),
             ],
           ),
-
-          const SizedBox(height: 6),
-
-          const Text(
-            'Estimativa de fichas compradas por intervalo.',
-            style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 14),
-          ),
-
-          const SizedBox(height: 22),
-
-          const SimpleBarChart(
-            labels: ['11:00', '11:30', '12:00', '12:30', '13:00', '13:30'],
-            values: [35, 58, 86, 72, 50, 26],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -417,56 +503,84 @@ class DashboardMenuCard extends StatelessWidget {
 
   const DashboardMenuCard({super.key, required this.onManageMenu});
 
+  String valueOrDefault(String value) {
+    return value.trim().isEmpty ? 'Não informado' : value.trim();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
+    return StreamBuilder<MenuModel?>(
+      stream: MenuService().watchTodayMenu(),
+      builder: (context, snapshot) {
+        final menu = snapshot.data;
+        final loading = snapshot.connectionState == ConnectionState.waiting;
+
+        return AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.restaurant_menu_rounded, color: AppColors.primary),
-              SizedBox(width: 8),
-              Text(
-                'Cardápio de hoje',
-                style: TextStyle(
-                  color: AppColors.onSurface,
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
+              const Row(
+                children: [
+                  Icon(Icons.restaurant_menu_rounded, color: AppColors.primary),
+                  SizedBox(width: 8),
+                  Text(
+                    'Cardápio de hoje',
+                    style: TextStyle(
+                      color: AppColors.onSurface,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              if (loading) ...[
+                const Text(
+                  'Carregando cardápio...',
+                  style: TextStyle(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 14,
+                  ),
+                ),
+              ] else if (menu == null) ...[
+                const Text(
+                  'Cardápio ainda não cadastrado.',
+                  style: TextStyle(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+              ] else ...[
+                FoodLine(label: 'Principal', value: valueOrDefault(menu.mainDish)),
+                FoodLine(
+                  label: 'Acompanhamentos',
+                  value: valueOrDefault(menu.sideDishes),
+                ),
+                FoodLine(
+                  label: 'Sobremesa',
+                  value: valueOrDefault(menu.dessert),
+                ),
+                FoodLine(label: 'Bebida', value: valueOrDefault(menu.drink)),
+              ],
+
+              const SizedBox(height: 10),
+
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: onManageMenu,
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: const Text('Editar cardápio'),
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 16),
-
-          const FoodLine(label: 'Principal', value: 'Strogonoff de frango'),
-
-          const FoodLine(
-            label: 'Acompanhamentos',
-            value: 'Arroz, feijão, batata palha e salada',
-          ),
-
-          const FoodLine(
-            label: 'Sobremesa',
-            value: 'Gelatina de morango ou fruta',
-          ),
-
-          const FoodLine(label: 'Bebida', value: 'Suco de acerola'),
-
-          const SizedBox(height: 10),
-
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: OutlinedButton.icon(
-              onPressed: onManageMenu,
-              icon: const Icon(Icons.edit_note_rounded),
-              label: const Text('Editar cardápio'),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -479,7 +593,8 @@ class SimpleBarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double maxValue = values.reduce((a, b) => a > b ? a : b);
+    final double highestValue = values.reduce((a, b) => a > b ? a : b);
+    final double maxValue = highestValue <= 0 ? 1 : highestValue;
 
     return SizedBox(
       height: 180,

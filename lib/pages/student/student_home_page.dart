@@ -1,22 +1,60 @@
 import 'package:flutter/material.dart';
-import 'menu_page.dart';
+
 import '../../core/app_colors.dart';
+import '../../models/app_user_model.dart';
+import '../../models/menu_model.dart';
+import '../../models/ticket_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/menu_service.dart';
+import '../../services/ticket_service.dart';
+import '../../services/user_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/food_line.dart';
 import '../../widgets/info_box.dart';
 import '../../widgets/status_chip.dart';
-import 'buy_ticket_page.dart';
-import 'ticket_qr_page.dart';
-import 'feedback_page.dart';
 import '../auth/login_page.dart';
+import 'buy_ticket_page.dart';
+import 'feedback_page.dart';
+import 'menu_page.dart';
+import 'ticket_qr_page.dart';
 
 class StudentHomePage extends StatelessWidget {
   const StudentHomePage({super.key});
 
-  void mostrarMensagem(BuildContext context, String mensagem) {
-    ScaffoldMessenger.of(
+  Future<void> sairDoApp(BuildContext context) async {
+    await AuthService().signOut();
+
+    if (!context.mounted) return;
+
+    Navigator.pushAndRemoveUntil(
       context,
-    ).showSnackBar(SnackBar(content: Text(mensagem)));
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
+  Stream<AppUserModel?> carregarPerfilAluno() {
+    final user = AuthService().currentUser;
+
+    if (user == null) {
+      return Stream.value(null);
+    }
+
+    return UserService().watchUserProfile(user.uid);
+  }
+
+  Stream<TicketModel?> carregarFichaHoje() {
+    final user = AuthService().currentUser;
+
+    if (user == null) {
+      return Stream.value(null);
+    }
+
+    return TicketService().watchTodayTicket(user.uid);
+  }
+
+  Stream<MenuModel?> carregarCardapioHoje() {
+    return MenuService().watchTodayMenu();
   }
 
   @override
@@ -42,11 +80,7 @@ class StudentHomePage extends StatelessWidget {
         actions: [
           IconButton(
             onPressed: () {
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginPage()),
-                (route) => false,
-              );
+              sairDoApp(context);
             },
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Sair',
@@ -62,154 +96,56 @@ class StudentHomePage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Olá, estudante!',
-                    style: TextStyle(
-                      color: AppColors.onSurface,
-                      fontSize: 28,
-                      height: 1.15,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  StreamBuilder<AppUserModel?>(
+                    stream: carregarPerfilAluno(),
+                    builder: (context, snapshot) {
+                      final aluno = snapshot.data;
 
-                  const SizedBox(height: 6),
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const StudentHomeHeader(
+                          nome: 'Carregando...',
+                          matricula: '',
+                        );
+                      }
 
-                  const Text(
-                    'Acompanhe sua ficha, cardápio e janela de atendimento.',
-                    style: TextStyle(
-                      color: AppColors.onSurfaceVariant,
-                      fontSize: 16,
-                      height: 1.4,
-                    ),
+                      if (aluno == null) {
+                        return const StudentHomeHeader(
+                          nome: 'Estudante',
+                          matricula: 'Matrícula não encontrada',
+                        );
+                      }
+
+                      return StudentHomeHeader(
+                        nome: aluno.name,
+                        matricula: aluno.registration,
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 20),
 
-                  AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const StatusChip(
-                          icon: Icons.check_circle_rounded,
-                          text: 'Ficha ativa para hoje',
-                          color: AppColors.secondary,
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        const Text(
-                          'Janela sugerida',
-                          style: TextStyle(
-                            color: AppColors.onSurfaceVariant,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-
-                        const SizedBox(height: 4),
-
-                        const Text(
-                          '12:20 - 12:30',
-                          style: TextStyle(
-                            color: AppColors.onSurface,
-                            fontSize: 30,
-                            height: 1.1,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-
-                        const SizedBox(height: 14),
-
-                        const InfoBox(
-                          icon: Icons.notifications_active_outlined,
-                          color: AppColors.secondary,
-                          text:
-                              'Seu atendimento está se aproximando. Dirija-se ao RU nos próximos 10 minutos.',
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: FilledButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const TicketQrPage(),
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.qr_code_2_rounded),
-                            label: const Text('Ver QR Code'),
-                          ),
-                        ),
-                      ],
-                    ),
+                  StreamBuilder<TicketModel?>(
+                    stream: carregarFichaHoje(),
+                    builder: (context, snapshot) {
+                      return StudentTicketSummaryCard(
+                        ticket: snapshot.data,
+                        loading:
+                            snapshot.connectionState == ConnectionState.waiting,
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 16),
 
-                  AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(
-                              Icons.restaurant_menu_rounded,
-                              color: AppColors.primary,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Cardápio de hoje',
-                              style: TextStyle(
-                                color: AppColors.onSurface,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        const FoodLine(
-                          label: 'Prato principal',
-                          value: 'Strogonoff de frango',
-                        ),
-
-                        const FoodLine(
-                          label: 'Acompanhamentos',
-                          value: 'Arroz, feijão, batata palha e salada',
-                        ),
-
-                        const FoodLine(
-                          label: 'Sobremesa',
-                          value: 'Gelatina de morango ou fruta',
-                        ),
-
-                        const SizedBox(height: 8),
-
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const MenuPage(),
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.menu_book_outlined),
-                            label: const Text('Abrir cardápio completo'),
-                          ),
-                        ),
-                      ],
-                    ),
+                  StreamBuilder<MenuModel?>(
+                    stream: carregarCardapioHoje(),
+                    builder: (context, snapshot) {
+                      return StudentMenuPreviewCard(
+                        menu: snapshot.data,
+                        loading:
+                            snapshot.connectionState == ConnectionState.waiting,
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 16),
@@ -264,6 +200,266 @@ class StudentHomePage extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class StudentTicketSummaryCard extends StatelessWidget {
+  final TicketModel? ticket;
+  final bool loading;
+
+  const StudentTicketSummaryCard({
+    super.key,
+    required this.ticket,
+    required this.loading,
+  });
+
+  bool get hasTicket {
+    return ticket != null;
+  }
+
+  String get statusText {
+    if (loading) {
+      return 'Verificando ficha';
+    }
+
+    if (ticket == null) {
+      return 'Nenhuma ficha ativa';
+    }
+
+    switch (ticket!.status) {
+      case 'validated':
+        return 'Ficha validada';
+      case 'paid':
+        return 'Ficha ativa para hoje';
+      default:
+        return 'Ficha encontrada';
+    }
+  }
+
+  Color get statusColor {
+    if (ticket?.status == 'validated') {
+      return AppColors.primary;
+    }
+
+    if (ticket?.status == 'paid') {
+      return AppColors.secondary;
+    }
+
+    return AppColors.outline;
+  }
+
+  IconData get statusIcon {
+    if (ticket?.status == 'validated') {
+      return Icons.verified_rounded;
+    }
+
+    if (ticket?.status == 'paid') {
+      return Icons.check_circle_rounded;
+    }
+
+    return Icons.confirmation_number_outlined;
+  }
+
+  String get windowText {
+    if (loading) {
+      return 'Carregando...';
+    }
+
+    if (ticket == null) {
+      return 'Nenhuma ficha comprada';
+    }
+
+    return '${ticket!.suggestedStartTime} - ${ticket!.suggestedEndTime}';
+  }
+
+  String get infoText {
+    if (loading) {
+      return 'Buscando sua ficha no banco de dados.';
+    }
+
+    if (ticket == null) {
+      return 'Compre uma ficha para gerar o QR Code de acesso ao RU.';
+    }
+
+    if (ticket!.status == 'validated') {
+      return 'Sua ficha já foi utilizada. Você já pode avaliar a refeição.';
+    }
+
+    return 'Seu atendimento está se aproximando. Dirija-se ao RU dentro da janela sugerida se possível.';
+  }
+
+  void abrirAcao(BuildContext context) {
+    if (ticket == null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const BuyTicketPage()),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TicketQrPage(ticketId: ticket!.id),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          StatusChip(
+            icon: statusIcon,
+            text: statusText,
+            color: statusColor,
+          ),
+
+          const SizedBox(height: 18),
+
+          Text(
+            hasTicket ? 'Janela sugerida' : 'Ficha de hoje',
+            style: const TextStyle(
+              color: AppColors.onSurfaceVariant,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            windowText,
+            style: const TextStyle(
+              color: AppColors.onSurface,
+              fontSize: 30,
+              height: 1.1,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          InfoBox(
+            icon: hasTicket
+                ? Icons.notifications_active_outlined
+                : Icons.info_outline_rounded,
+            color: hasTicket ? AppColors.secondary : AppColors.primary,
+            text: infoText,
+          ),
+
+          const SizedBox(height: 18),
+
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton.icon(
+              onPressed: loading ? null : () => abrirAcao(context),
+              icon: Icon(hasTicket ? Icons.qr_code_2_rounded : Icons.pix_rounded),
+              label: Text(hasTicket ? 'Ver QR Code' : 'Comprar ficha'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class StudentMenuPreviewCard extends StatelessWidget {
+  final MenuModel? menu;
+  final bool loading;
+
+  const StudentMenuPreviewCard({
+    super.key,
+    required this.menu,
+    required this.loading,
+  });
+
+  String valueOrDefault(String value) {
+    return value.trim().isEmpty ? 'Não informado' : value.trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.restaurant_menu_rounded,
+                color: AppColors.primary,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Cardápio de hoje',
+                style: TextStyle(
+                  color: AppColors.onSurface,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          if (loading) ...[
+            const Text(
+              'Carregando cardápio...',
+              style: TextStyle(
+                color: AppColors.onSurfaceVariant,
+                fontSize: 14,
+              ),
+            ),
+          ] else if (menu == null) ...[
+            const Text(
+              'Cardápio ainda não cadastrado pela gestão.',
+              style: TextStyle(
+                color: AppColors.onSurfaceVariant,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+          ] else ...[
+            FoodLine(
+              label: 'Prato principal',
+              value: valueOrDefault(menu!.mainDish),
+            ),
+            FoodLine(
+              label: 'Acompanhamentos',
+              value: valueOrDefault(menu!.sideDishes),
+            ),
+            FoodLine(
+              label: 'Sobremesa',
+              value: valueOrDefault(menu!.dessert),
+            ),
+          ],
+
+          const SizedBox(height: 8),
+
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const MenuPage(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.menu_book_outlined),
+              label: const Text('Abrir cardápio completo'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -337,6 +533,69 @@ class HomeActionCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class StudentHomeHeader extends StatelessWidget {
+  final String nome;
+  final String matricula;
+
+  const StudentHomeHeader({
+    super.key,
+    required this.nome,
+    required this.matricula,
+  });
+
+  String get primeiroNome {
+    final partes = nome.trim().split(' ');
+
+    if (partes.isEmpty || partes.first.isEmpty) {
+      return 'estudante';
+    }
+
+    return partes.first;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Olá, $primeiroNome!',
+          style: const TextStyle(
+            color: AppColors.onSurface,
+            fontSize: 28,
+            height: 1.15,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+
+        const SizedBox(height: 6),
+
+        Text(
+          matricula.isEmpty
+              ? 'Acompanhe sua ficha, cardápio e janela de atendimento.'
+              : 'Matrícula: $matricula',
+          style: const TextStyle(
+            color: AppColors.onSurfaceVariant,
+            fontSize: 16,
+            height: 1.4,
+          ),
+        ),
+
+        const SizedBox(height: 4),
+
+        const Text(
+          'Acompanhe sua ficha, cardápio e janela de atendimento.',
+          style: TextStyle(
+            color: AppColors.onSurfaceVariant,
+            fontSize: 15,
+            height: 1.4,
+          ),
+        ),
+      ],
     );
   }
 }

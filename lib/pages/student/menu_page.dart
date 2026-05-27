@@ -1,28 +1,40 @@
 import 'package:flutter/material.dart';
-import 'buy_ticket_page.dart';
+
 import '../../core/app_colors.dart';
-import '../../widgets/app_card.dart';
-import '../../widgets/food_line.dart';
-import '../../widgets/info_box.dart';
+import '../../models/menu_model.dart';
+import '../../services/menu_service.dart';
 
 class MenuPage extends StatelessWidget {
   const MenuPage({super.key});
 
-  void mostrarMensagem(BuildContext context, String mensagem) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(mensagem)));
+  String formatarData(DateTime date) {
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final year = date.year.toString();
+
+    return '$day/$month/$year';
+  }
+
+  String formatarAtualizacao(DateTime date) {
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+
+    return '$day/$month às $hour:$minute';
   }
 
   @override
   Widget build(BuildContext context) {
+    final MenuService menuService = MenuService();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         surfaceTintColor: AppColors.surface,
         title: const Text(
-          'Cardápio do dia',
+          'Cardápio',
           style: TextStyle(
             color: AppColors.primary,
             fontWeight: FontWeight.w800,
@@ -30,192 +42,319 @@ class MenuPage extends StatelessWidget {
         ),
       ),
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Cardápio de hoje',
-                    style: TextStyle(
-                      color: AppColors.onSurface,
-                      fontSize: 28,
-                      height: 1.15,
-                      fontWeight: FontWeight.w800,
-                    ),
+        child: StreamBuilder<MenuModel?>(
+          stream: menuService.watchTodayMenu(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            }
+
+            final menu = snapshot.data;
+
+            if (menu == null) {
+              return const EmptyMenuView();
+            }
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 520,
                   ),
-
-                  const SizedBox(height: 6),
-
-                  const Text(
-                    'Confira as refeições disponíveis no Restaurante Universitário.',
-                    style: TextStyle(
-                      color: AppColors.onSurfaceVariant,
-                      fontSize: 16,
-                      height: 1.4,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  const MealSectionCard(
-                    icon: Icons.lunch_dining_rounded,
-                    title: 'Almoço',
-                    time: '11:30 às 13:30',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      FoodLine(
-                        label: 'Prato principal',
-                        value: 'Strogonoff de frango',
+                      const Text(
+                        'Cardápio de hoje',
+                        style: TextStyle(
+                          color: AppColors.onSurface,
+                          fontSize: 28,
+                          height: 1.15,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                      FoodLine(
-                        label: 'Acompanhamentos',
-                        value: 'Arroz branco, feijão, batata palha e salada',
+
+                      const SizedBox(height: 6),
+
+                      Text(
+                        'Atualizado em ${formatarAtualizacao(menu.updatedAt)}',
+                        style: const TextStyle(
+                          color: AppColors.onSurfaceVariant,
+                          fontSize: 16,
+                          height: 1.4,
+                        ),
                       ),
-                      FoodLine(
-                        label: 'Sobremesa',
-                        value: 'Gelatina de morango ou fruta do dia',
-                      ),
-                      FoodLine(label: 'Bebida', value: 'Suco de acerola'),
-                    ],
-                  ),
 
-                  const SizedBox(height: 16),
+                      const SizedBox(height: 20),
 
-                  const MealSectionCard(
-                    icon: Icons.eco_rounded,
-                    title: 'Opção vegetariana',
-                    time: 'Disponível durante o almoço',
-                    children: [
-                      FoodLine(
-                        label: 'Prato principal',
-                        value: 'Proteína de soja acebolada',
-                      ),
-                      FoodLine(
-                        label: 'Acompanhamentos',
-                        value: 'Arroz, feijão, salada de folhas e legumes',
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  const MealSectionCard(
-                    icon: Icons.warning_amber_rounded,
-                    title: 'Informações alimentares',
-                    time: 'Alergênicos e observações',
-                    children: [
-                      FoodLine(label: 'Contém', value: 'Lactose e soja'),
-                      FoodLine(
-                        label: 'Observação',
-                        value:
-                            'Em caso de restrição alimentar, consulte a equipe do RU.',
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  const InfoBox(
-                    icon: Icons.info_outline_rounded,
-                    text:
-                        'O cardápio poderá ser atualizado pela administração do RU. Esta versão ainda usa dados simulados.',
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const BuyTicketPage(),
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: AppColors.outlineVariant,
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.shopping_cart_rounded),
-                      label: const Text('Comprar ficha'),
-                    ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 12,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            MenuInfoCard(
+                              icon: Icons.restaurant_menu_rounded,
+                              title: 'Prato principal',
+                              value: menu.mainDish,
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            MenuInfoCard(
+                              icon: Icons.rice_bowl_outlined,
+                              title: 'Acompanhamentos',
+                              value: menu.sideDishes,
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            MenuInfoCard(
+                              icon: Icons.eco_outlined,
+                              title: 'Opção vegetariana',
+                              value: menu.vegetarianOption.isEmpty
+                                  ? 'Não informada'
+                                  : menu.vegetarianOption,
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            MenuInfoCard(
+                              icon: Icons.icecream_outlined,
+                              title: 'Sobremesa',
+                              value: menu.dessert.isEmpty
+                                  ? 'Não informada'
+                                  : menu.dessert,
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            MenuInfoCard(
+                              icon: Icons.local_drink_outlined,
+                              title: 'Bebida',
+                              value: menu.drink.isEmpty
+                                  ? 'Não informada'
+                                  : menu.drink,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      if (menu.allergens.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: AppColors.outlineVariant,
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                color: AppColors.secondary,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Alergênicos: ${menu.allergens}',
+                                  style: const TextStyle(
+                                    color: AppColors.onSurface,
+                                    fontSize: 14,
+                                    height: 1.4,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      if (menu.allergens.isNotEmpty)
+                        const SizedBox(height: 12),
+
+                      if (menu.observations.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryFixed,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.info_outline_rounded,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  menu.observations,
+                                  style: const TextStyle(
+                                    color: AppColors.primary,
+                                    fontSize: 13,
+                                    height: 1.4,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
   }
 }
 
-class MealSectionCard extends StatelessWidget {
+class MenuInfoCard extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String time;
-  final List<Widget> children;
+  final String value;
 
-  const MealSectionCard({
+  const MenuInfoCard({
     super.key,
     required this.icon,
     required this.title,
-    required this.time,
-    required this.children,
+    required this.value,
   });
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.outlineVariant,
+        ),
+      ),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryFixed,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: AppColors.primary, size: 24),
-              ),
-
-              const SizedBox(width: 12),
-
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: AppColors.onSurface,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      time,
-                      style: const TextStyle(
-                        color: AppColors.onSurfaceVariant,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Icon(
+            icon,
+            color: AppColors.primary,
+            size: 24,
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(width: 12),
 
-          ...children,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: AppColors.onSurface,
+                    fontSize: 16,
+                    height: 1.35,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class EmptyMenuView extends StatelessWidget {
+  const EmptyMenuView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 420,
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: AppColors.outlineVariant,
+              ),
+            ),
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.restaurant_menu_rounded,
+                  color: AppColors.primary,
+                  size: 56,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Cardápio ainda não cadastrado',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.onSurface,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Quando a gestão cadastrar o cardápio do dia, ele aparecerá aqui automaticamente.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 15,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

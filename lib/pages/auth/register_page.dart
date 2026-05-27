@@ -5,19 +5,21 @@ import '../../core/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
 import '../../widgets/app_logo.dart';
-import 'admin_dashboard_page.dart';
+import '../student/student_home_page.dart';
 
-class AdminLoginPage extends StatefulWidget {
-  const AdminLoginPage({super.key});
+class RegisterPage extends StatefulWidget {
+  const RegisterPage({super.key});
 
   @override
-  State<AdminLoginPage> createState() => _AdminLoginPageState();
+  State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _AdminLoginPageState extends State<AdminLoginPage> {
+class _RegisterPageState extends State<RegisterPage> {
   final AuthService authService = AuthService();
   final UserService userService = UserService();
 
+  final TextEditingController nomeController = TextEditingController();
+  final TextEditingController matriculaController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController senhaController = TextEditingController();
 
@@ -26,17 +28,26 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
 
   @override
   void dispose() {
+    nomeController.dispose();
+    matriculaController.dispose();
     emailController.dispose();
     senhaController.dispose();
     super.dispose();
   }
 
-  Future<void> entrarComoGestao() async {
+  Future<void> criarConta() async {
+    final String nome = nomeController.text.trim();
+    final String matricula = matriculaController.text.trim();
     final String email = emailController.text.trim();
     final String senha = senhaController.text.trim();
 
-    if (email.isEmpty || senha.isEmpty) {
-      mostrarMensagem('Preencha o e-mail e a senha.');
+    if (nome.isEmpty || matricula.isEmpty || email.isEmpty || senha.isEmpty) {
+      mostrarMensagem('Preencha todos os campos.');
+      return;
+    }
+
+    if (senha.length < 6) {
+      mostrarMensagem('A senha precisa ter pelo menos 6 caracteres.');
       return;
     }
 
@@ -45,45 +56,39 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
     });
 
     try {
-      final credential = await authService.signInWithEmailAndPassword(
+      final UserCredential credential =
+          await authService.createUserWithEmailAndPassword(
         email: email,
         password: senha,
       );
 
-      final firebaseUser = credential.user;
+      final User? firebaseUser = credential.user;
 
       if (firebaseUser == null) {
-        mostrarMensagem('Não foi possível acessar a conta.');
+        mostrarMensagem('Não foi possível criar o usuário.');
         return;
       }
 
-      final appUser = await userService.getUserProfile(firebaseUser.uid);
-
-      if (appUser == null) {
-        await authService.signOut();
-        mostrarMensagem('Perfil da gestão não encontrado no Firestore.');
-        return;
-      }
-
-      if (!appUser.isAdmin) {
-        await authService.signOut();
-        mostrarMensagem('Esta conta não tem permissão de gestão.');
-        return;
-      }
+      await userService.createStudentProfile(
+        uid: firebaseUser.uid,
+        name: nome,
+        email: email,
+        registration: matricula,
+      );
 
       if (!mounted) return;
 
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) => const AdminDashboardPage(),
+          builder: (_) => const StudentHomePage(),
         ),
         (route) => false,
       );
     } on FirebaseAuthException catch (erro) {
       mostrarMensagem(traduzirErroFirebase(erro));
     } catch (erro) {
-      mostrarMensagem('Erro ao acessar gestão: $erro');
+      mostrarMensagem('Erro ao criar conta: $erro');
     } finally {
       if (mounted) {
         setState(() {
@@ -97,12 +102,10 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
     switch (erro.code) {
       case 'invalid-email':
         return 'E-mail inválido.';
-      case 'user-not-found':
-        return 'Usuário não encontrado.';
-      case 'wrong-password':
-        return 'Senha incorreta.';
-      case 'invalid-credential':
-        return 'E-mail ou senha incorretos.';
+      case 'email-already-in-use':
+        return 'Este e-mail já está cadastrado.';
+      case 'weak-password':
+        return 'A senha é fraca. Use pelo menos 6 caracteres.';
       case 'network-request-failed':
         return 'Erro de conexão. Verifique sua internet.';
       case 'operation-not-allowed':
@@ -128,7 +131,7 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
         backgroundColor: AppColors.surface,
         surfaceTintColor: AppColors.surface,
         title: const Text(
-          'Acesso da gestão',
+          'Criar conta',
           style: TextStyle(
             color: AppColors.primary,
             fontWeight: FontWeight.w800,
@@ -162,12 +165,12 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const AppLogo(size: 90),
+                    const AppLogo(size: 88),
 
                     const SizedBox(height: 16),
 
                     const Text(
-                      'Painel da gestão',
+                      'Cadastro do aluno',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.primary,
@@ -179,23 +182,45 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                     const SizedBox(height: 4),
 
                     const Text(
-                      'Entre com uma conta autorizada para gerenciar o RU.',
+                      'Crie uma conta para acessar o RU Smart.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.onSurfaceVariant,
                         fontSize: 15,
-                        height: 1.4,
                       ),
                     ),
 
                     const SizedBox(height: 28),
 
                     TextField(
+                      controller: nomeController,
+                      enabled: !carregando,
+                      decoration: const InputDecoration(
+                        labelText: 'Nome completo',
+                        prefixIcon: Icon(Icons.person_outline_rounded),
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    TextField(
+                      controller: matriculaController,
+                      keyboardType: TextInputType.number,
+                      enabled: !carregando,
+                      decoration: const InputDecoration(
+                        labelText: 'Matrícula',
+                        prefixIcon: Icon(Icons.badge_outlined),
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    TextField(
                       controller: emailController,
                       keyboardType: TextInputType.emailAddress,
                       enabled: !carregando,
                       decoration: const InputDecoration(
-                        labelText: 'E-mail da gestão',
+                        labelText: 'E-mail',
                         prefixIcon: Icon(Icons.email_outlined),
                       ),
                     ),
@@ -232,19 +257,19 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                       width: double.infinity,
                       height: 52,
                       child: FilledButton.icon(
-                        onPressed: carregando ? null : entrarComoGestao,
+                        onPressed: carregando ? null : criarConta,
                         icon: carregando
                             ? const SizedBox(
-                                width: 18,
-                                height: 18,
+                                width: 20,
+                                height: 20,
                                 child: CircularProgressIndicator(
-                                  strokeWidth: 2.2,
+                                  strokeWidth: 2.3,
                                   color: Colors.white,
                                 ),
                               )
-                            : const Icon(Icons.admin_panel_settings_outlined),
+                            : const Icon(Icons.person_add_alt_1_rounded),
                         label: Text(
-                          carregando ? 'Entrando...' : 'Entrar na gestão',
+                          carregando ? 'Criando...' : 'Criar conta',
                         ),
                       ),
                     ),
@@ -258,7 +283,7 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                               Navigator.pop(context);
                             },
                       icon: const Icon(Icons.arrow_back_rounded),
-                      label: const Text('Voltar'),
+                      label: const Text('Voltar para login'),
                     ),
                   ],
                 ),

@@ -1,13 +1,45 @@
 import 'package:flutter/material.dart';
 import 'pix_payment_page.dart';
+import 'ticket_qr_page.dart';
 import '../../core/app_colors.dart';
+import '../../services/auth_service.dart';
+import '../../services/ticket_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/info_box.dart';
 
 class BuyTicketPage extends StatelessWidget {
   const BuyTicketPage({super.key});
 
-  void gerarPagamento(BuildContext context) {
+  Future<void> gerarPagamento(BuildContext context) async {
+    final user = AuthService().currentUser;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Usuário não está logado.')),
+      );
+      return;
+    }
+
+    final ticket = await TicketService().getTodayTicket(user.uid);
+
+    if (!context.mounted) return;
+
+    if (ticket != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Você já possui uma ficha para hoje.'),
+        ),
+      );
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TicketQrPage(ticketId: ticket.id),
+        ),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const PixPaymentPage()),

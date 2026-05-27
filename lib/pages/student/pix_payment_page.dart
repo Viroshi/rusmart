@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'ticket_confirmation_page.dart';
+
 import '../../core/app_colors.dart';
+import '../../models/app_user_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/ticket_service.dart';
+import '../../services/user_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/fake_qr_code.dart';
 import '../../widgets/info_box.dart';
+import 'ticket_qr_page.dart';
 
 class PixPaymentPage extends StatelessWidget {
   const PixPaymentPage({super.key});
@@ -15,16 +20,67 @@ class PixPaymentPage extends StatelessWidget {
   void copiarCodigoPix(BuildContext context) {
     Clipboard.setData(const ClipboardData(text: pixCode));
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Código PIX copiado.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Código PIX copiado.'),
+      ),
+    );
   }
 
-  void confirmarPagamento(BuildContext context) {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const TicketConfirmationPage()),
-    );
+  Future<void> confirmarPagamento(BuildContext context) async {
+    try {
+      final firebaseUser = AuthService().currentUser;
+
+      if (firebaseUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Usuário não está logado.'),
+          ),
+        );
+        return;
+      }
+
+      final AppUserModel? appUser = await UserService().getUserProfile(
+        firebaseUser.uid,
+      );
+
+      if (!context.mounted) return;
+
+      if (appUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Perfil do aluno não encontrado.'),
+          ),
+        );
+        return;
+      }
+
+      final ticket = await TicketService().createPaidTicket(
+        user: appUser,
+        mealType: 'Almoço',
+        price: 3.00,
+      );
+
+      if (!context.mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TicketQrPage(
+            ticketId: ticket.id,
+          ),
+        ),
+        (route) => route.isFirst,
+      );
+    } catch (erro) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao gerar ficha: $erro'),
+        ),
+      );
+    }
   }
 
   @override
@@ -47,7 +103,9 @@ class PixPaymentPage extends StatelessWidget {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
+              constraints: const BoxConstraints(
+                maxWidth: 520,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -113,7 +171,9 @@ class PixPaymentPage extends StatelessWidget {
 
                         const SizedBox(height: 20),
 
-                        const FakeQrCode(size: 230),
+                        const FakeQrCode(
+                          size: 230,
+                        ),
 
                         const SizedBox(height: 20),
 
@@ -139,7 +199,9 @@ class PixPaymentPage extends StatelessWidget {
 
                         const SizedBox(height: 18),
 
-                        const Divider(color: AppColors.outlineVariant),
+                        const Divider(
+                          color: AppColors.outlineVariant,
+                        ),
 
                         const SizedBox(height: 14),
 
@@ -163,7 +225,9 @@ class PixPaymentPage extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: AppColors.surfaceContainerLow,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.outlineVariant),
+                            border: Border.all(
+                              color: AppColors.outlineVariant,
+                            ),
                           ),
                           child: const SelectableText(
                             pixCode,

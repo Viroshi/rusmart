@@ -1,36 +1,43 @@
 import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
-import '../../widgets/app_card.dart';
-import '../../widgets/info_box.dart';
+import '../../models/ticket_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/feedback_service.dart';
+import '../../services/ticket_service.dart';
 
 class FeedbackPage extends StatefulWidget {
-  const FeedbackPage({super.key});
+  final String? ticketId;
+
+  const FeedbackPage({
+    super.key,
+    this.ticketId,
+  });
 
   @override
   State<FeedbackPage> createState() => _FeedbackPageState();
 }
 
 class _FeedbackPageState extends State<FeedbackPage> {
-  int notaSelecionada = 4;
-
+  final FeedbackService feedbackService = FeedbackService();
+  final TicketService ticketService = TicketService();
   final TextEditingController comentarioController = TextEditingController();
 
-  final Set<String> pontosSelecionados = {
-    'Comida boa',
-    'Atendimento bom',
-  };
+  int nota = 0;
+  bool salvando = false;
 
   final List<String> opcoes = [
     'Comida boa',
-    'Fila rápida',
+    'Temperatura adequada',
+    'Fila organizada',
     'Atendimento bom',
-    'Temperatura boa',
     'Pouca variedade',
+    'Comida fria',
     'Demora na fila',
-    'Porção pequena',
-    'Ambiente limpo',
+    'Porção insuficiente',
   ];
+
+  final Set<String> selecionados = {};
 
   @override
   void dispose() {
@@ -38,27 +45,92 @@ class _FeedbackPageState extends State<FeedbackPage> {
     super.dispose();
   }
 
-  void alternarOpcao(String opcao, bool selecionado) {
+  Stream<TicketModel?> carregarFicha() {
+    if (widget.ticketId != null) {
+      return ticketService.watchTicketById(widget.ticketId!);
+    }
+
+    final user = AuthService().currentUser;
+
+    if (user == null) {
+      return Stream.value(null);
+    }
+
+    return ticketService.watchTodayTicket(user.uid);
+  }
+
+  Future<void> salvarAvaliacao(TicketModel ticket) async {
+    if (nota == 0) {
+      mostrarMensagem('Selecione uma nota para a refeição.');
+      return;
+    }
+
+    if (ticket.status != 'validated') {
+      mostrarMensagem('A avaliação só é liberada depois da ficha ser validada.');
+      return;
+    }
+
     setState(() {
-      if (selecionado) {
-        pontosSelecionados.add(opcao);
+      salvando = true;
+    });
+
+    try {
+      await feedbackService.saveFeedback(
+        ticket: ticket,
+        rating: nota,
+        selectedTags: selecionados.toList(),
+        comment: comentarioController.text,
+      );
+
+      if (!mounted) return;
+
+      mostrarMensagem('Avaliação enviada com sucesso.');
+
+      Navigator.pop(context);
+    } catch (erro) {
+      mostrarMensagem('Erro ao salvar avaliação: $erro');
+    } finally {
+      if (mounted) {
+        setState(() {
+          salvando = false;
+        });
+      }
+    }
+  }
+
+  void alternarOpcao(String opcao) {
+    setState(() {
+      if (selecionados.contains(opcao)) {
+        selecionados.remove(opcao);
       } else {
-        pontosSelecionados.remove(opcao);
+        selecionados.add(opcao);
       }
     });
   }
 
-  void enviarFeedback() {
+  void mostrarMensagem(String mensagem) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Feedback enviado no protótipo.'),
+      SnackBar(
+        content: Text(mensagem),
       ),
     );
+  }
 
-    Navigator.popUntil(
-      context,
-      (route) => route.isFirst,
-    );
+  String textoNota() {
+    switch (nota) {
+      case 1:
+        return 'Muito ruim';
+      case 2:
+        return 'Ruim';
+      case 3:
+        return 'Regular';
+      case 4:
+        return 'Boa';
+      case 5:
+        return 'Excelente';
+      default:
+        return 'Toque nas estrelas para avaliar';
+    }
   }
 
   @override
@@ -77,234 +149,298 @@ class _FeedbackPageState extends State<FeedbackPage> {
         ),
       ),
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 520,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Como foi sua refeição?',
-                    style: TextStyle(
-                      color: AppColors.onSurface,
-                      fontSize: 28,
-                      height: 1.15,
-                      fontWeight: FontWeight.w800,
-                    ),
+        child: StreamBuilder<TicketModel?>(
+          stream: carregarFicha(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            }
+
+            final ticket = snapshot.data;
+
+            if (ticket == null) {
+              return const EmptyFeedbackView(
+                title: 'Ficha não encontrada',
+                message:
+                    'Não foi possível encontrar uma ficha para avaliação.',
+              );
+            }
+
+            if (ticket.status != 'validated') {
+              return const EmptyFeedbackView(
+                title: 'Avaliação indisponível',
+                message:
+                    'A avaliação só fica disponível depois que a ficha é validada pela gestão.',
+              );
+            }
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 560,
                   ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Como foi sua refeição?',
+                        style: TextStyle(
+                          color: AppColors.onSurface,
+                          fontSize: 28,
+                          height: 1.15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
 
-                  const SizedBox(height: 6),
+                      const SizedBox(height: 6),
 
-                  const Text(
-                    'Sua opinião ajuda a gestão do RU a melhorar o atendimento e a qualidade da comida.',
-                    style: TextStyle(
-                      color: AppColors.onSurfaceVariant,
-                      fontSize: 16,
-                      height: 1.4,
-                    ),
-                  ),
+                      Text(
+                        '${ticket.mealType} • Matrícula ${ticket.registration}',
+                        style: const TextStyle(
+                          color: AppColors.onSurfaceVariant,
+                          fontSize: 16,
+                          height: 1.4,
+                        ),
+                      ),
 
-                  const SizedBox(height: 20),
+                      const SizedBox(height: 20),
 
-                  AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(
-                              Icons.star_rounded,
-                              color: AppColors.primary,
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: AppColors.outlineVariant,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 12,
+                              offset: const Offset(0, 5),
                             ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Avaliação geral',
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'Sua nota',
                               style: TextStyle(
                                 color: AppColors.onSurface,
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                          ],
-                        ),
 
-                        const SizedBox(height: 16),
+                            const SizedBox(height: 12),
 
-                        Center(
-                          child: Wrap(
-                            alignment: WrapAlignment.center,
-                            spacing: 2,
-                            children: List.generate(
-                              5,
-                              (index) {
-                                final int valor = index + 1;
-                                final bool ativo = valor <= notaSelecionada;
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(5, (index) {
+                                final starValue = index + 1;
+                                final selected = starValue <= nota;
 
                                 return IconButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      notaSelecionada = valor;
-                                    });
-                                  },
+                                  onPressed: salvando
+                                      ? null
+                                      : () {
+                                          setState(() {
+                                            nota = starValue;
+                                          });
+                                        },
                                   icon: Icon(
-                                    ativo
+                                    selected
                                         ? Icons.star_rounded
                                         : Icons.star_border_rounded,
                                     size: 38,
-                                    color: ativo
-                                        ? Colors.amber.shade700
+                                    color: selected
+                                        ? AppColors.secondary
                                         : AppColors.outline,
                                   ),
                                 );
-                              },
+                              }),
                             ),
-                          ),
-                        ),
 
-                        const SizedBox(height: 6),
+                            const SizedBox(height: 4),
 
-                        Center(
-                          child: Text(
-                            '$notaSelecionada de 5',
-                            style: const TextStyle(
-                              color: AppColors.onSurfaceVariant,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(
-                              Icons.check_circle_outline_rounded,
-                              color: AppColors.primary,
-                            ),
-                            SizedBox(width: 8),
                             Text(
-                              'O que se destacou?',
+                              textoNota(),
+                              style: const TextStyle(
+                                color: AppColors.onSurfaceVariant,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: AppColors.outlineVariant,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Marque pontos observados',
                               style: TextStyle(
                                 color: AppColors.onSurface,
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                          ],
-                        ),
 
-                        const SizedBox(height: 14),
+                            const SizedBox(height: 12),
 
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: opcoes.map(
-                            (opcao) {
-                              final bool selecionado =
-                                  pontosSelecionados.contains(opcao);
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: opcoes.map((opcao) {
+                                final selected = selecionados.contains(opcao);
 
-                              return FilterChip(
-                                label: Text(opcao),
-                                selected: selecionado,
-                                selectedColor:
-                                    AppColors.primaryFixed.withOpacity(0.9),
-                                checkmarkColor: AppColors.primary,
-                                labelStyle: TextStyle(
-                                  color: selecionado
-                                      ? AppColors.primary
-                                      : AppColors.onSurfaceVariant,
-                                  fontWeight: selecionado
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                ),
-                                side: BorderSide(
-                                  color: selecionado
-                                      ? AppColors.primaryFixedDim
-                                      : AppColors.outlineVariant,
-                                ),
-                                onSelected: (value) {
-                                  alternarOpcao(opcao, value);
-                                },
-                              );
-                            },
-                          ).toList(),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(
-                              Icons.edit_note_rounded,
-                              color: AppColors.primary,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Comentário opcional',
-                              style: TextStyle(
-                                color: AppColors.onSurface,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                              ),
+                                return FilterChip(
+                                  selected: selected,
+                                  label: Text(opcao),
+                                  onSelected: salvando
+                                      ? null
+                                      : (_) {
+                                          alternarOpcao(opcao);
+                                        },
+                                );
+                              }).toList(),
                             ),
                           ],
                         ),
+                      ),
 
-                        const SizedBox(height: 14),
+                      const SizedBox(height: 16),
 
-                        TextField(
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: AppColors.outlineVariant,
+                          ),
+                        ),
+                        child: TextField(
                           controller: comentarioController,
-                          minLines: 4,
-                          maxLines: 6,
+                          enabled: !salvando,
+                          maxLines: 4,
                           decoration: const InputDecoration(
+                            labelText: 'Comentário opcional',
                             hintText:
-                                'Ex: a comida estava boa, mas a fila demorou um pouco...',
+                                'Escreva uma observação sobre a refeição, fila ou atendimento.',
+                            alignLabelWithHint: true,
+                            prefixIcon: Icon(Icons.notes_rounded),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      SizedBox(
+                        height: 52,
+                        child: FilledButton.icon(
+                          onPressed:
+                              salvando ? null : () => salvarAvaliacao(ticket),
+                          icon: salvando
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.send_rounded),
+                          label: Text(
+                            salvando ? 'Enviando...' : 'Enviar avaliação',
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-
-                  const SizedBox(height: 16),
-
-                  const InfoBox(
-                    icon: Icons.info_outline_rounded,
-                    text:
-                        'No sistema real, essas avaliações serão usadas pela gestão para identificar problemas recorrentes e melhorar o serviço.',
-                  ),
-
-                  const SizedBox(height: 22),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: FilledButton.icon(
-                      onPressed: enviarFeedback,
-                      icon: const Icon(Icons.send_rounded),
-                      label: const Text('Enviar avaliação'),
-                    ),
-                  ),
-                ],
+                ),
               ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class EmptyFeedbackView extends StatelessWidget {
+  final String title;
+  final String message;
+
+  const EmptyFeedbackView({
+    super.key,
+    required this.title,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 420,
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: AppColors.outlineVariant,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.rate_review_outlined,
+                  color: AppColors.primary,
+                  size: 56,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.onSurface,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 15,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
