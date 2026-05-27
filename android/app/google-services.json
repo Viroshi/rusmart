@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "516171780775",
+    "project_id": "ru-smart-uespi-vitor",
+    "storage_bucket": "ru-smart-uespi-vitor.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:516171780775:android:25d22547016589adef0182",
+        "android_client_info": {
+          "package_name": "com.example.rusmart"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8uzB4_EJo_gbXetpAw2j8WAXNDjVMdL0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
