@@ -1,7 +1,7 @@
 # RU Smart
 
 <p align="center">
-  <img src="assets/images/logo-rusmart.png" alt="Logo do RU Smart" width="140">
+  <img src="lib/assets/images/logo-rusmart.png" alt="Logo do RU Smart" width="140">
 </p>
 
 <h1 align="center">RU Smart</h1>
@@ -36,7 +36,7 @@ Siga o passo a passo:
 ### Diagrama de arquitetura
 
 <p align="center">
-  <img src="assets/images/arquitetura-rusmart.png" alt="Diagrama de arquitetura do RU Smart" width="850">
+  <img src="lib/assets/images/arquitetura-rusmart.png" alt="Diagrama de arquitetura do RU Smart" width="850">
 </p>
 
 O diagrama mostra, de forma simples, como o aluno e a gestão acessam o aplicativo Flutter, que utiliza Firebase Authentication para login e Cloud Firestore para salvar usuários, cardápios, fichas e avaliações.
