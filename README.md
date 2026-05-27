@@ -18,8 +18,6 @@
 
 ## Baixar o aplicativo
 
-Para testar o RU Smart, não é necessário instalar Flutter, Android Studio ou configurar o projeto manualmente.
-
 Siga o passo a passo:
 
 1. Acesse a página do projeto no GitHub.
@@ -35,31 +33,7 @@ Siga o passo a passo:
 
 ---
 
-## Apresentação visual do projeto
-
-### Logo do aplicativo
-
-Coloque a imagem da logo na pasta `docs/` do projeto e use este caminho no README:
-
-```txt
-docs/logo-rusmart.png
-```
-
-Ela aparece no topo deste README usando:
-
-```html
-<img src="docs/logo-rusmart.png" alt="Logo do RU Smart" width="140">
-```
-
 ### Diagrama de arquitetura
-
-Coloque o diagrama de arquitetura na pasta `docs/` do projeto e use este caminho:
-
-```txt
-docs/arquitetura-rusmart.png
-```
-
-A imagem deve aparecer logo abaixo:
 
 <p align="center">
   <img src="assets/images/arquitetura-rusmart.png" alt="Diagrama de arquitetura do RU Smart" width="850">
